@@ -19,14 +19,14 @@ void OpenPositionFromCommand() {
       string parts[];
       StringSplit(command, ' ', parts); // Memisahkan string berdasarkan spasi
 
-      if (ArraySize(parts) >= 7) {  // Memastikan ada nilai Stop Loss (SL) dan Take Profit (TP)
+      if (ArraySize(parts) >= 7) {
          string symbol = parts[0];
          string orderType = parts[1];
          double price = StringToDouble(parts[2]);
          int magicID = StringToInteger(parts[3]);  // Mengambil ID magic dari file
          double lotSize = StringToDouble(parts[4]); // Mengambil ukuran lot dari file
-         double stopLoss = StringToDouble(parts[5]); // Mengambil nilai SL dari file
-         double takeProfit = StringToDouble(parts[6]); // Mengambil nilai TP dari file
+         double sl = StringToDouble(parts[5]);      // Mengambil nilai Stop Loss dari file
+         double tp = StringToDouble(parts[6]);      // Mengambil nilai Take Profit dari file
 
          // Cek apakah ID magic berbeda dari yang terakhir diproses
          if (magicID != lastMagicID) {
@@ -55,9 +55,9 @@ void OpenPositionFromCommand() {
                   request.price    = price;                  // Harga limit yang ditentukan
                   request.deviation= 3;                      // Slippage
                   request.magic    = magicID;                // ID magic untuk mengidentifikasi posisi
+                  request.sl= sl;                     // Stop Loss (SL)
+                  request.tp= tp;                    // Take Profit (TP)
                   request.comment  = "Open Position from Command"; // Komentar
-                  request.sl       = stopLoss;               // Stop Loss yang diambil dari file
-                  request.tp       = takeProfit;            // Take Profit yang diambil dari file
 
                   MqlTradeResult result = {};
                   if (!OrderSend(request, result)) {

@@ -1,59 +1,58 @@
 from flask import Flask, request, jsonify
+import trade_module as trade_module  # Import modul yang telah dibuat sebelumnya
 import requests
 
 app = Flask(__name__)
 
-# Daftar URL cabang (Server Flask cabang)
-BRANCH_SERVERS = [
-    "http://branch_server_1:5000/send-command",  # Ganti dengan alamat cabang yang sesuai
-    "http://branch_server_2:5000/send-command",  # Ganti dengan alamat cabang yang sesuai
-    "http://branch_server_3:5000/send-command"   # Ganti dengan alamat cabang yang sesuai
+# Daftar URL server lain yang ingin menerima order
+other_servers = [
+    # Tambahkan URL server lain jika diperlukan
 ]
 
-# Fungsi untuk mengirimkan data ke server cabang
-def send_to_branch_server(data):
-    responses = []
-    for server_url in BRANCH_SERVERS:
-        try:
-            # Mengirimkan data ke server cabang dengan metode POST
-            response = requests.post(server_url, json=data)
-            responses.append({
-                'server': server_url,
-                'status_code': response.status_code,
-                'response': response.json()
-            })
-        except Exception as e:
-            responses.append({
-                'server': server_url,
-                'status_code': 'Failed',
-                'error': str(e)
-            })
-    return responses
-
-# Endpoint untuk menerima perintah dari klien dan meneruskannya ke server cabang
-@app.route('/send-command-to-branches', methods=['POST'])
-def send_command_to_branches():
-    # Ambil data JSON yang dikirimkan oleh klien
-    data = request.get_json()
-
-    # Pastikan data yang diperlukan ada
-    if all(k in data for k in ('symbol', 'orderType', 'price', 'lotSize', 'stopLoss', 'takeProfit')):
-        # Kirim perintah ke server cabang
-        branch_responses = send_to_branch_server(data)
-
-        return jsonify({
-            'status': 'success',
-            'message': 'Command sent to all branch servers.',
-            'responses': branch_responses
-        }), 200
-    else:
-        return jsonify({"status": "error", "message": "Missing required fields in the request."}), 400
-
-# Endpoint untuk mengecek apakah server utama berjalan
 @app.route('/')
 def home():
-    return "Main Flask Server is running."
+    return "Flask Trading API is Running!"
+
+@app.route('/trade', methods=['POST'])
+def trade():
+    data = request.get_json()
+
+    # Validasi parameter input
+    required_params = ['symbol', 'max_risk', 'stop_loss', 'order_type']
+    for param in required_params:
+        if param not in data:
+            return jsonify({"success": False, "message": f"Parameter '{param}' tidak ditemukan."}), 400
+
+    symbol = data['symbol']
+    max_risk = data['max_risk']
+    stop_loss = data['stop_loss']
+    order_type = data['order_type'].lower()
+    order_price = data.get('order_price')  # Opsional
+
+    # Validasi tipe order
+    valid_order_types = ['buy', 'sell', 'buy_limit', 'sell_limit']
+    if order_type not in valid_order_types:
+        return jsonify({"success": False, "message": "Tipe order tidak valid. Gunakan 'buy', 'sell', 'buy_limit', atau 'sell_limit'."}), 400
+
+    # Eksekusi order di server utama
+    result = trade_module.trade(symbol, max_risk, stop_loss, order_type, order_price)
+
+    if result["success"]:
+        # Kondisi khusus untuk simbol tertentu
+        if data['symbol'] == "NDX100":
+            data['symbol'] = "NAS100"
+        data['symbol'] = f"{data['symbol']}.raw"
+
+        # Kirimkan request ke server lain
+        for server_url in other_servers:
+            try:
+                response = requests.post(server_url, json=data, timeout=5)  # Timeout 5 detik
+                if response.status_code != 200:
+                    print(f"Error saat mengirim request ke {server_url}: {response.status_code}")
+            except requests.exceptions.RequestException as e:
+                print(f"Exception saat mengirim request ke {server_url}: {e}")
+
+    return jsonify(result)
 
 if __name__ == '__main__':
-    # Jalankan server utama di localhost dengan port 5000
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5005)
